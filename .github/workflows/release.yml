@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Install UPX
+        run: sudo apt-get update && sudo apt-get install -y upx-ucl
+
+      - name: Build release artifacts
+        working-directory: build
+        run: |
+          chmod +x build-release.sh
+          ./build-release.sh
+
+      - name: Generate checksums
+        working-directory: build
+        run: sha256sum kcptun-*.tar.gz > SHA256SUMS.txt
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kcptun-binaries
+          path: |
+            build/kcptun-*.tar.gz
+            build/SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/kcptun-*.tar.gz
+            build/SHA256SUMS.txt
+          generate_release_notes: true
