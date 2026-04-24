@@ -20,21 +20,27 @@ VERSION=`date -u +%Y%m%d`
 LDFLAGS="-X main.VERSION=$VERSION -s -w"
 GCFLAGS=""
 
-OSES=(linux darwin windows freebsd)
-ARCHS=(amd64 386)
-for os in ${OSES[@]}; do
-	for arch in ${ARCHS[@]}; do
-		suffix=""
-		if [ "$os" == "windows" ]
-		then
-			suffix=".exe"
-		fi
-		env CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o client_${os}_${arch}${suffix} github.com/xtaci/kcptun/client
-		env CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o server_${os}_${arch}${suffix} github.com/xtaci/kcptun/server
-		if $UPX; then upx -9 client_${os}_${arch}${suffix} server_${os}_${arch}${suffix};fi
-		tar -zcf kcptun-${os}-${arch}-$VERSION.tar.gz client_${os}_${arch}${suffix} server_${os}_${arch}${suffix}
-		$sum kcptun-${os}-${arch}-$VERSION.tar.gz
-	done
+# os/arch pairs to build. darwin/386 is dropped (unsupported since Go 1.15).
+TARGETS=(
+	linux/amd64 linux/386 linux/arm64
+	darwin/amd64 darwin/arm64
+	windows/amd64 windows/386
+	freebsd/amd64 freebsd/386
+)
+for target in ${TARGETS[@]}; do
+	os=${target%/*}
+	arch=${target#*/}
+	suffix=""
+	if [ "$os" == "windows" ]
+	then
+		suffix=".exe"
+	fi
+	env CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o client_${os}_${arch}${suffix} github.com/xtaci/kcptun/client
+	env CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o server_${os}_${arch}${suffix} github.com/xtaci/kcptun/server
+	# UPX does not support darwin/arm64 or arm64 mach-o; skip it there.
+	if $UPX && [ "$arch" != "arm64" -o "$os" != "darwin" ]; then upx -9 client_${os}_${arch}${suffix} server_${os}_${arch}${suffix} || true;fi
+	tar -zcf kcptun-${os}-${arch}-$VERSION.tar.gz client_${os}_${arch}${suffix} server_${os}_${arch}${suffix}
+	$sum kcptun-${os}-${arch}-$VERSION.tar.gz
 done
 
 # ARM
